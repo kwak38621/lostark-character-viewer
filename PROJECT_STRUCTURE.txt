@@ -1,0 +1,131 @@
+================================================================================
+  LOSTARK PROJECT  —  캐릭터 정보 검색 웹 애플리케이션
+  Stack: Spring Boot 3.3 (Java 17) + React 18 (TypeScript 5) + Tailwind CSS 3
+================================================================================
+
+[아키텍처]
+  Browser → React (Vite, :3000) → /api 프록시 → Spring Boot (:8080) → Lost Ark API
+
+[데이터 흐름]
+  SearchPage → api.ts(Axios) → Controller → ServiceImpl → LostarkApiClient → 공식 API
+
+
+━━━ BACKEND ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+controller/CharacterController.java  (@RestController, /api/characters)
+  GET /{name}                 → CharacterInfoDto
+  GET /{name}/siblings        → List<SiblingDto>
+  GET /{name}/siblings/enriched → List<EnrichedSiblingDto>
+  GET /{name}/skills          → List<SkillDto>
+  GET /{name}/arkpassive      → ArkPassiveDto
+  GET /{name}/arkgrid         → ArkGridDto
+  GET /{name}/cards           → CardDto
+  GET /{name}/gems            → GemDto
+  GET /{name}/debug?filters=  → String (원본 API 응답, 디버그용)
+
+service/CharacterService.java        (인터페이스)
+service/CharacterServiceImpl.java    (구현체, LostarkApiClient 위임)
+
+client/LostarkApiClient.java
+  fetchCharacterInfo  → profiles+equipment+engravings 조합 호출
+  fetchSiblings       → /characters/{name}/siblings
+  fetchEnrichedSiblings → 형제 목록 + CompletableFuture 병렬로 각 멤버 이미지/노드 추가
+  fetchSkills         → /combat-skills (레벨 2+ 필터)
+  fetchArkPassive     → filters=arkpassive
+  fetchArkGrid        → /arkgrid 별도 엔드포인트
+  fetchCards          → filters=cards
+  fetchGems           → filters=gems (Effects.Skills 슬롯 매핑)
+  ※ 캐릭터 없으면 CharacterNotFoundException, API 실패 시 LostarkApiException throw
+
+exception/  (에러 처리 패키지)
+  CharacterNotFoundException  → 캐릭터 없을 때 (→ HTTP 404)
+  LostarkApiException         → API 호출 실패 (→ HTTP 502)
+  ErrorResponse               → { message, status } JSON record
+  GlobalExceptionHandler      → @RestControllerAdvice
+    CharacterNotFoundException → 404
+    LostarkApiException        → 502
+    HttpClientErrorException   → 404/429/401/403 각각 처리
+    ResourceAccessException    → 504 (타임아웃)
+    Exception                  → 500 (기타)
+
+dto/  (Java Record, PascalCase ↔ camelCase 분리 원칙)
+  ArmoryResponseDto   ← Lost Ark API 역직렬화 (@JsonProperty PascalCase)
+  CharacterInfoDto    ← 프론트 반환 (camelCase)
+  SiblingDto / EnrichedSiblingDto / SkillDto / ArkPassiveDto
+  ArkGridDto / ArkGridResponseDto / CardDto / GemDto
+
+config/AppConfig.java  → RestTemplate 빈 등록
+application.yml        → port:8080, MySQL, Lost Ark API key/url
+
+
+━━━ FRONTEND ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+services/api.ts  (Axios, baseURL=/api, timeout=10s)
+  인터셉터: response 에러 시 server.data.message 파싱 → Error로 throw
+  fetchCharacter / fetchSiblings / fetchEnrichedSiblings / fetchSkills
+  fetchArkPassive / fetchArkGrid / fetchCards / fetchGems
+
+pages/SearchPage.tsx
+  상태: query, recentSearches(localStorage), character, loading, error
+  handleSearch → fetchCharacter → 성공 시 저장, 실패 시 e.message 표시
+  onSelectCharacter 콜백을 CharacterCard에 전달 (형제 클릭 → 재검색)
+
+components/RecentSearchList.tsx
+  Props: searches[], onSelect(name), onDelete(name)
+  각 태그: 이름 클릭(검색) + ✕ 버튼(삭제)
+
+components/CharacterCard.tsx  (메인 카드, 6개 탭)
+  좌측 aside (280px): 캐릭터 이미지 + 이름/서버/클래스 + 아이템레벨 + CardPanel
+  우측: 탭 바 + 탭 콘텐츠
+
+  [탭 목록]
+  장비        EquipmentTab   — 방어구(좌열) + 악세서리(우열), 부적/나침반 제외
+                               ArmorCard: 아이콘+강화뱃지+품질바
+                               AccesCard: 아이콘+품질바+스탯+상/중/하 뱃지
+                               GemsSection: 피해/쿨감/기타 분류, 스킬아이콘+보석 오버레이
+  스킬        SkillsTab      — 일반/패시브 분리, 아이콘+레벨+트라이포드+룬
+  보유 원정대  SiblingsTab    — 서버별 그룹, 3열 그리드, 클릭 시 해당 캐릭터 검색
+  아크 그리드  ArkGridTab     — 효과 뱃지 + 슬롯 2열(hover 툴팁)
+  아크 패시브  ArkPassiveTab  — 진화/깨달음/도약 포인트 + 카테고리별 효과
+  주간 영수증  WeeklyReceiptTab — 아래 참고
+
+  [주간 영수증 탭]
+  지평의 성당 포함 토글 (ON/OFF)
+  - ON  (기본): 세르카 + 카제로스 종막 + 지평의 성당 (귀속)
+  - OFF        : 세르카 + 카제로스 종막 + 파멸의 성채 (거래가능)
+
+  주간 레이드 (상위 6캐릭, 캐릭터별 3개 레이드 표시)
+  레이드 데이터 (hardcoded):
+    세르카      노말/하드/나이트메어 : 35,000 / 44,000 / 54,000  (1710/1730/1740)
+    카제로스 종막 노말/하드          : 40,000 / 52,000           (1710/1730)
+    파멸의 성채  노말/하드           : 33,000 / 42,000           (1700/1720)
+    지평의 성당  1/2/3단계 귀속      : 30,000 / 40,000 / 50,000  (1700/1720/1750)
+    카제로스 서막~3막 (하위 캐릭용)  : 6,100 ~ 27,000
+  일일 숙제 (전 캐릭, 1회/일 × 7일)
+    심연의잔영(1730+) / 쿠르잔전선(1640+) / 카오스던전 + 가토 ×1
+
+  [에러 처리]
+  탭별 에러 상태 (skillsError, siblingsError, arkGridError, arkError)
+  → 로드 실패 시 빈 화면 대신 TabError 컴포넌트 (⚠️ + 메시지)
+  → 서버 ErrorResponse.message 그대로 표시
+
+  [주요 파서 함수]
+  parsePolishLines   — COLOR 코드 → 상/중/하 색상 (FE9600/CE43FC/00B5FF 등)
+  parseInlineInfo    — 강화수치, 품질, 스탯 라인 추출
+  parseEquipSections — 장비 툴팁 전체 섹션 파싱
+  parseArkTooltip    — 아크그리드 툴팁 파싱
+  qualityBarColor    — 품질 점수 → 색상 (100:금/70+:파랑/30+:초록 등)
+
+  [ArkIconWithTooltip]
+  createPortal → document.body 렌더링 (overflow 클리핑 방지)
+  useLayoutEffect → 실제 높이 측정 후 뷰포트 초과 시 Y 재조정
+
+  [CardPanel]  — 좌측 패널 상시 표시
+  3열 그리드(72px 이미지) + 각성별(★) + 세트 효과 접기/펼치기
+
+types/character.ts  — 프론트 전역 타입 정의 (CharacterInfo, GemData, CardData 등)
+
+설정 파일
+  vite.config.ts   — @alias, 포트 3000, /api 프록시
+  package.json     — react@18, axios@1.7, tailwindcss@3
+================================================================================
