@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "comment": "Render 백엔드로 /api 프록시 (CORS 회피)",
       "source": "/api/:path*",
       "destination": "https://lostark-character-viewer.onrender.com/api/:path*"
     }
