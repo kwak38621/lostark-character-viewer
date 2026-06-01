@@ -17,6 +17,7 @@ backend/bin/
 
 # IDE
 .idea/
+.vscode/
 *.iws
 *.ipr
 *.iml
@@ -24,10 +25,14 @@ backend/bin/
 .project
 .settings/
 
+# 로컬 메모/지침 (배포 무관)
+no/
+
 # 민감 정보 (절대 커밋 금지)
 application.yml
 application-*.yml
 !**/application.yml.example
+!**/application-docker.yml
 
 # ── Node / React ─────────────────────────────────
 node_modules/

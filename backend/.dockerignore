@@ -1,0 +1,7 @@
+build/
+.gradle/
+bin/
+*.log
+.idea/
+.vscode/
+src/main/resources/application.yml

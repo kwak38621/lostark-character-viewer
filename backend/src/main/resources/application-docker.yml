@@ -1,6 +1,7 @@
+# 도커/배포 전용 프로파일 — 값은 환경변수에서 주입
 lostark:
   api:
-    key: YOUR_LOSTARK_API_KEY
+    key: ${LOSTARK_API_KEY}
     base-url: https://developer-lostark.game.onstove.com
 
 server:

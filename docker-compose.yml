@@ -1,0 +1,18 @@
+# 로스트아크 캐릭터 조회 서비스 — 로컬 통합 실행용 (DB 없음)
+services:
+  # Spring Boot 백엔드 (Lost Ark API 중계, stateless)
+  backend:
+    build: ./backend
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      LOSTARK_API_KEY: ${LOSTARK_API_KEY}
+    restart: unless-stopped
+
+  # React + Nginx 프론트엔드 (외부 노출 지점, /api → backend 프록시)
+  frontend:
+    build: ./frontend
+    ports:
+      - "${WEB_PORT:-8000}:80"
+    depends_on:
+      - backend
+    restart: unless-stopped

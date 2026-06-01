@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "comment": "Koyeb 백엔드 배포 후 destination의 호스트를 실제 URL로 교체하세요",
+      "source": "/api/:path*",
+      "destination": "https://REPLACE_WITH_KOYEB_URL/api/:path*"
+    }
+  ]
+}
