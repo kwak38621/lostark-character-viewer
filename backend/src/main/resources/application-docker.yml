@@ -5,7 +5,8 @@ lostark:
     base-url: https://developer-lostark.game.onstove.com
 
 server:
-  port: 8080
+  # Render 등은 PORT 환경변수로 포트를 주입함. 없으면 8080(로컬 도커)
+  port: ${PORT:8080}
 
 logging:
   level:
